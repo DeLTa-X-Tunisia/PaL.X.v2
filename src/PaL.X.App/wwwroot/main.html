@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PaL.X v2</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
     <style>
         :root {
             --primary-color: #0078d4;
@@ -14,6 +15,10 @@
             --status-online: #4caf50;
             --status-busy: #f44336;
             --status-away: #ff9800;
+            --status-call: #2196f3;
+            --status-video: #9c27b0;
+            --status-dnd: #d32f2f;
+            --status-offline: #9e9e9e;
         }
 
         body {
@@ -89,15 +94,76 @@
             border: 2px solid #fff;
         }
 
+        .status-indicator.online { background-color: var(--status-online); }
+        .status-indicator.busy { background-color: var(--status-busy); }
+        .status-indicator.call { background-color: var(--status-call); }
+        .status-indicator.video { background-color: var(--status-video); }
+        .status-indicator.away { background-color: var(--status-away); }
+        .status-indicator.dnd { background-color: var(--status-dnd); }
+        .status-indicator.offline { background-color: var(--status-offline); }
+
         .user-info h2 {
             margin: 0;
             font-size: 18px;
             color: var(--text-color);
         }
 
-        .user-info .status-text {
+        .status-dropdown {
+            position: relative;
+            cursor: pointer;
             font-size: 12px;
-            color: #888;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .status-selected {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 160px;
+            display: none;
+            z-index: 100;
+        }
+
+        .status-menu.show {
+            display: block;
+        }
+
+        .status-item {
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-item:hover {
+            background: #f5f5f5;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online { background: var(--status-online); }
+        .status-dot.busy { background: var(--status-busy); }
+        .status-dot.call { background: var(--status-call); }
+        .status-dot.video { background: var(--status-video); }
+        .status-dot.away { background: var(--status-away); }
+        .status-dot.dnd { background: var(--status-dnd); }
+        .status-dot.offline { background: var(--status-offline); }
             margin-top: 4px;
         }
 
@@ -224,7 +290,20 @@
                 </div>
                 <div class="user-info">
                     <h2 id="user-name">Chargement...</h2>
-                    <div class="status-text" id="user-status-text">En ligne</div>
+                    <div class="status-dropdown">
+                        <div class="status-selected" id="statusSelected">
+                            <span class="status-dot online" id="currentStatusDot"></span> <span id="currentStatusText">En ligne</span> <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="status-menu" id="statusMenu">
+                            <div class="status-item" data-status="0"><span class="status-dot online"></span> En ligne</div>
+                            <div class="status-item" data-status="1"><span class="status-dot busy"></span> Occupé</div>
+                            <div class="status-item" data-status="2"><span class="status-dot call"></span> En appel Vocal</div>
+                            <div class="status-item" data-status="3"><span class="status-dot video"></span> En appel Vidéo</div>
+                            <div class="status-item" data-status="4"><span class="status-dot away"></span> Absent</div>
+                            <div class="status-item" data-status="5"><span class="status-dot dnd"></span> Ne pas déranger</div>
+                            <div class="status-item" data-status="6"><span class="status-dot offline"></span> Hors ligne</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -259,8 +338,85 @@
             window.chrome.webview.postMessage({ type: 'logout' });
         }
 
-        function setUser(user) {
-            document.getElementById('user-name').innerText = user.username;
+        const statusMap = {
+            0: { text: 'En ligne', class: 'online' },
+            1: { text: 'Occupé', class: 'busy' },
+            2: { text: 'En appel Vocal', class: 'call' },
+            3: { text: 'En appel Vidéo', class: 'video' },
+            4: { text: 'Absent', class: 'away' },
+            5: { text: 'Ne pas déranger', class: 'dnd' },
+            6: { text: 'Hors ligne', class: 'offline' }
+        };
+
+        // Dropdown logic
+        const statusSelected = document.getElementById('statusSelected');
+        const statusMenu = document.getElementById('statusMenu');
+
+        if (statusSelected) {
+            statusSelected.addEventListener('click', (e) => {
+                e.stopPropagation();
+                statusMenu.classList.toggle('show');
+            });
+
+            document.addEventListener('click', () => {
+                statusMenu.classList.remove('show');
+            });
+
+            document.querySelectorAll('.status-item').forEach(item => {
+                item.addEventListener('click', async (e) => {
+                    const status = parseInt(item.dataset.status);
+                    await updateStatus(status);
+                });
+            });
+        }
+
+        async function updateStatus(status) {
+            // We need the username. If it's "Chargement...", we can't update.
+            // We should store the current user object globally or in a closure.
+            // But reading from DOM is risky if the text is formatted.
+            // Let's use window.currentUser if available.
+            
+            if (!window.currentUser) {
+                console.error("User not loaded yet");
+                return;
+            }
+
+            try {
+                const apiUrl = window.apiUrl || 'http://localhost:5000';
+                const response = await fetch(`${apiUrl}/api/users/${window.currentUser.username}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(status)
+                });
+                
+                if (response.ok) {
+                    updateStatusUI(status);
+                } else {
+                    console.error("Failed to update status", response.statusText);
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        function updateStatusUI(status) {
+            const info = statusMap[status];
+            if (!info) return;
+            
+            const statusText = document.getElementById('currentStatusText');
+            const statusDot = document.getElementById('currentStatusDot');
+            const indicator = document.getElementById('user-status-dot');
+
+            if (statusText) statusText.innerText = info.text;
+            if (statusDot) statusDot.className = `status-dot ${info.class}`;
+            if (indicator) indicator.className = `status-indicator ${info.class}`;
+        }
+
+        async function setUser(user) {
+            window.currentUser = user; // Store globally
+            document.getElementById('user-name').innerText = user.displayName || user.username;
             if (user.avatarUrl) {
                 document.getElementById('user-avatar').src = user.avatarUrl;
             } else {
@@ -269,10 +425,21 @@
             
             if (user.isAdmin) {
                 document.getElementById('app-title').innerText = "PaL.X Admin Panel";
-                document.getElementById('user-status-text').innerText = "Administrateur";
-                document.getElementById('user-status-text').style.color = "#f44336";
+                // Hide status dropdown for admin if not needed, or keep it
             } else {
                 document.getElementById('app-title').innerText = "PaL.X Client";
+            }
+
+            // Fetch status
+            try {
+                const apiUrl = window.apiUrl || 'http://localhost:5000';
+                const response = await fetch(`${apiUrl}/api/users/${user.username}/status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatusUI(data.status);
+                }
+            } catch (error) {
+                console.error('Error fetching status:', error);
             }
         }
 
@@ -294,16 +461,47 @@
         window.chrome.webview.addEventListener('message', event => {
             const data = event.data;
             if (data.type === 'init') {
+                if (data.apiUrl) window.apiUrl = data.apiUrl;
                 setUser(data.user);
                 // Add dummy friends for now
                 addFriend({ name: "Alice", status: "En ligne" });
                 addFriend({ name: "Bob", status: "Occupé" });
                 addFriend({ name: "Charlie", status: "Absent" });
+                
+                // Start SignalR
+                initSignalR();
             }
         });
 
         // Signal ready
         window.chrome.webview.postMessage({ type: 'mainReady' });
+
+        // Initialize SignalR
+        function initSignalR() {
+            if (!window.currentUser) return;
+
+            const apiUrl = window.apiUrl || 'http://localhost:5000';
+            const connection = new signalR.HubConnectionBuilder()
+                .withUrl(`${apiUrl}/chatHub?username=${window.currentUser.username}&userId=${window.currentUser.id}`)
+                .withAutomaticReconnect()
+                .build();
+
+            connection.on("UserStatusChanged", (userId, status) => {
+                console.log(`User ${userId} changed status to ${status}`);
+                // If it's me, update my UI (in case updated from another device)
+                if (userId === window.currentUser.id) {
+                    updateStatusUI(status);
+                }
+                // TODO: Update friend list UI
+            });
+
+            connection.start()
+                .then(() => console.log("SignalR Connected"))
+                .catch(err => console.error("SignalR Connection Error: ", err));
+        }
+
+        // Call initSignalR after a short delay or when we have the API URL
+        // We'll call it inside the 'init' message handler instead, to ensure we have the URL
     </script>
 </body>
 </html>

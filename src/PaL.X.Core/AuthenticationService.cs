@@ -106,4 +106,47 @@ public class AuthenticationService
             .Where(u => u.Id != userId)
             .ToListAsync();
     }
+
+    public async Task CreateSessionAsync(User user, string? ipAddress)
+    {
+        // Deactivate previous active sessions for this user
+        var activeSessions = await _context.Sessions
+            .Where(s => s.UserId == user.Id && s.IsActive)
+            .ToListAsync();
+            
+        foreach (var s in activeSessions)
+        {
+            s.IsActive = false;
+            s.DisconnectedAt = DateTime.UtcNow;
+        }
+
+        var session = new Session
+        {
+            UserId = user.Id,
+            Username = user.Username,
+            IpAddress = ipAddress,
+            ConnectedAt = DateTime.UtcNow,
+            LastActivity = DateTime.UtcNow,
+            IsActive = true,
+            RealStatus = PaL.X.Shared.Enums.UserStatus.Online,
+            DisplayedStatus = PaL.X.Shared.Enums.UserStatus.Online
+        };
+
+        _context.Sessions.Add(session);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task LogoutAsync(int userId)
+    {
+        var activeSessions = await _context.Sessions
+            .Where(s => s.UserId == userId && s.IsActive)
+            .ToListAsync();
+
+        foreach (var s in activeSessions)
+        {
+            s.IsActive = false;
+            s.DisconnectedAt = DateTime.UtcNow;
+        }
+        await _context.SaveChangesAsync();
+    }
 }

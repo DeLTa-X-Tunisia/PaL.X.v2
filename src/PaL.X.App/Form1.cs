@@ -1,5 +1,7 @@
 using Microsoft.Web.WebView2.Core;
 using System.Text.Json;
+using System.Net.Http;
+using System.Net.Http.Json;
 using PaL.X.Shared;
 using PaL.X.Data;
 using PaL.X.Core;
@@ -9,6 +11,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -20,42 +23,22 @@ public partial class Form1 : Form
     private Microsoft.Web.WebView2.WinForms.WebView2 webView;
     private const string AssetsPath = @"C:\Users\azizi\OneDrive\Desktop\PaL.X\PaL.X.v2.assets";
     private const string ApiUrl = "http://localhost:5030";
-    private AuthenticationService _authService;
-    private PalContext _dbContext;
+    private readonly HttpClient _httpClient;
     private PaL.X.Shared.Models.User _currentUser;
+    private System.Windows.Forms.Timer _heartbeatTimer;
 
     public Form1()
     {
         InitializeComponent();
-        InitializeDatabase();
+        _httpClient = new HttpClient { BaseAddress = new Uri(ApiUrl) };
         InitializeWebView();
+        InitializeHeartbeat();
         
         // Borderless and Compact
         this.FormBorderStyle = FormBorderStyle.None;
         this.Size = new Size(400, 550);
         this.StartPosition = FormStartPosition.CenterScreen;
         this.MaximizeBox = false;
-    }
-
-    private void InitializeDatabase()
-    {
-        var options = new DbContextOptionsBuilder<PalContext>()
-            .UseNpgsql("Host=localhost;Database=PaL.X.v2;Username=postgres;Password=2012704")
-            .Options;
-            
-        _dbContext = new PalContext(options);
-        
-        // Ensure DB exists (Quick dev mode)
-        try 
-        {
-            _dbContext.Database.EnsureCreated();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Erreur connexion DB: {ex.Message}\nAssurez-vous que PostgreSQL est lancé et la base créée.");
-        }
-
-        _authService = new AuthenticationService(_dbContext);
     }
 
     private async void InitializeWebView()
@@ -139,13 +122,28 @@ public partial class Form1 : Form
                     case "mainReady":
                         if (_currentUser != null)
                         {
-                            var profile = await _authService.GetProfileAsync(_currentUser.Id);
-                            string avatarUrl = profile?.ProfilePictureUrl;
+                            string avatarUrl = null;
+                            string fullName = _currentUser.Username;
+                            try 
+                            {
+                                var profileResponse = await _httpClient.GetAsync($"/api/users/{_currentUser.Username}/profile");
+                                if (profileResponse.IsSuccessStatusCode)
+                                {
+                                    var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
+                                    avatarUrl = profile?.ProfilePictureUrl;
+                                    if (profile != null && !string.IsNullOrEmpty(profile.FirstName) && !string.IsNullOrEmpty(profile.LastName))
+                                    {
+                                        fullName = $"{profile.LastName} {profile.FirstName}";
+                                    }
+                                }
+                            }
+                            catch {}
+
                             if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
                             {
                                  avatarUrl = ApiUrl + avatarUrl;
                             }
-                            PostMessage(new { type = "init", user = new { username = _currentUser.Username, isAdmin = _currentUser.IsAdmin, avatarUrl = avatarUrl } });
+                            PostMessage(new { type = "init", user = new { id = _currentUser.Id, username = _currentUser.Username, displayName = fullName, isAdmin = _currentUser.IsAdmin, avatarUrl = avatarUrl }, apiUrl = ApiUrl });
                         }
                         break;
                     case "logout":
@@ -159,8 +157,18 @@ public partial class Form1 : Form
                     case "profileReady":
                         if (_currentUser != null)
                         {
-                            var profile = await _authService.GetProfileAsync(_currentUser.Id);
-                            string avatarUrl = profile?.ProfilePictureUrl;
+                            string avatarUrl = null;
+                            try
+                            {
+                                var profileResponse = await _httpClient.GetAsync($"/api/users/{_currentUser.Username}/profile");
+                                if (profileResponse.IsSuccessStatusCode)
+                                {
+                                    var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
+                                    avatarUrl = profile?.ProfilePictureUrl;
+                                }
+                            }
+                            catch {}
+
                             if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
                             {
                                  avatarUrl = ApiUrl + avatarUrl;
@@ -211,26 +219,34 @@ public partial class Form1 : Form
 
     private async Task HandleLogin(string username, string password)
     {
-        var user = await _authService.LoginAsync(username, password);
-        if (user != null)
+        try
         {
-            _currentUser = user;
-            
-            // Check Profile
-            var profile = await _authService.GetProfileAsync(user.Id);
-            
-            if (profile != null && profile.IsComplete())
+            var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new { Username = username, Password = password });
+            if (response.IsSuccessStatusCode)
             {
-                NavigateToMain();
+                _currentUser = await response.Content.ReadFromJsonAsync<PaL.X.Shared.Models.User>();
+                
+                // Check Profile
+                var profileResponse = await _httpClient.GetAsync($"/api/users/{username}/profile");
+                if (profileResponse.IsSuccessStatusCode)
+                {
+                    var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
+                    if (profile != null && profile.IsComplete())
+                    {
+                        NavigateToMain();
+                        return;
+                    }
+                }
+                NavigateToProfile();
             }
             else
             {
-                NavigateToProfile();
+                PostMessage(new { type = "loginError", message = "Identifiants incorrects" });
             }
         }
-        else
+        catch (Exception ex)
         {
-            PostMessage(new { type = "loginError", message = "Identifiants incorrects" });
+            PostMessage(new { type = "loginError", message = "Erreur de connexion au serveur" });
         }
     }
 
@@ -242,6 +258,18 @@ public partial class Form1 : Form
             this.CenterToScreen();
         });
         webView.CoreWebView2.Navigate("https://app.pal.x/main.html");
+        
+        // Wait for navigation to complete then send init data
+        webView.NavigationCompleted += (s, e) => {
+            if (e.IsSuccess && webView.Source.ToString().EndsWith("main.html"))
+            {
+                PostMessage(new { 
+                    type = "init", 
+                    user = _currentUser,
+                    apiUrl = ApiUrl
+                });
+            }
+        };
     }
 
     private void NavigateToProfile()
@@ -277,17 +305,19 @@ public partial class Form1 : Form
                 PhoneNumberVisibility = payload.TryGetProperty("phoneNumberVisibility", out var phoneVisProp) ? (PaL.X.Shared.Models.VisibilityLevel)phoneVisProp.GetInt32() : PaL.X.Shared.Models.VisibilityLevel.Friends
             };
 
-            await _authService.SaveProfileAsync(profile);
-            NavigateToMain();
+            var response = await _httpClient.PutAsJsonAsync($"/api/users/{_currentUser.Username}/profile", profile);
+            if (response.IsSuccessStatusCode)
+            {
+                NavigateToMain();
+            }
+            else
+            {
+                MessageBox.Show("Erreur lors de la sauvegarde du profil.");
+            }
         }
         catch (Exception ex)
         {
-            var message = $"Erreur sauvegarde profil: {ex.Message}";
-            if (ex.InnerException != null)
-            {
-                message += $"\n\nDétails: {ex.InnerException.Message}";
-            }
-            MessageBox.Show(message);
+            MessageBox.Show($"Erreur sauvegarde profil: {ex.Message}");
         }
     }
 
@@ -295,19 +325,49 @@ public partial class Form1 : Form
     {
         try
         {
-            await _authService.RegisterAsync(username, password);
-            PostMessage(new { type = "registerSuccess" });
+            var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new { Username = username, Password = password });
+            if (response.IsSuccessStatusCode)
+            {
+                PostMessage(new { type = "registerSuccess" });
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                PostMessage(new { type = "registerError", message = error });
+            }
         }
         catch (Exception ex)
         {
-            PostMessage(new { type = "registerError", message = ex.Message });
+            PostMessage(new { type = "registerError", message = "Erreur de connexion au serveur" });
         }
     }
 
     private async void SendInitData()
     {
-        var friends = await _authService.GetFriendsAsync(_currentUser.Id);
-        var recipient = friends.FirstOrDefault(); // Just pick first for now
+        // Fetch friends from API
+        var recipientName = "Personne";
+        int recipientId = 0;
+
+        try 
+        {
+            var friendsResponse = await _httpClient.GetAsync($"/api/users/{_currentUser.Username}/friends");
+            if (friendsResponse.IsSuccessStatusCode)
+            {
+                var friends = await friendsResponse.Content.ReadFromJsonAsync<List<dynamic>>();
+                if (friends != null && friends.Count > 0)
+                {
+                    // Dynamic parsing is tricky, let's assume structure
+                    var first = friends[0];
+                    // System.Text.Json dynamic deserialization results in JsonElement usually
+                    if (first is JsonElement el)
+                    {
+                        recipientId = el.GetProperty("id").GetInt32();
+                        recipientName = el.GetProperty("username").GetString();
+                    }
+                }
+            }
+        }
+        catch {}
 
         var payload = new
         {
@@ -315,7 +375,7 @@ public partial class Form1 : Form
             payload = new 
             {
                 user = new { id = _currentUser.Id, name = _currentUser.Username },
-                recipient = recipient != null ? new { id = recipient.Id, name = recipient.Username } : new { id = 0, name = "Personne" }
+                recipient = new { id = recipientId, name = recipientName }
             }
         };
         PostMessage(payload);
@@ -403,7 +463,11 @@ public partial class Form1 : Form
 
     private void PostMessage(object data)
     {
-        string json = JsonSerializer.Serialize(data);
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        string json = JsonSerializer.Serialize(data, options);
         webView.CoreWebView2.PostWebMessageAsJson(json);
     }
 
@@ -415,4 +479,63 @@ public partial class Form1 : Form
     public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
     [DllImport("user32.dll")]
     public static extern bool ReleaseCapture();
+
+    protected override async void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        if (_currentUser != null)
+        {
+            try
+            {
+                await _httpClient.PostAsync($"api/auth/logout/{_currentUser.Id}", null);
+            }
+            catch { /* Ignore errors on exit */ }
+        }
+    }
+
+    private void InitializeHeartbeat()
+    {
+        _heartbeatTimer = new System.Windows.Forms.Timer();
+        _heartbeatTimer.Interval = 3000; // Check every 3 seconds
+        _heartbeatTimer.Tick += async (s, e) => await CheckServerStatus();
+        _heartbeatTimer.Start();
+    }
+
+    private async Task CheckServerStatus()
+    {
+        try
+        {
+            // Use a short timeout so the UI doesn't freeze if the server hangs
+            using (var cts = new CancellationTokenSource(1000))
+            {
+                var response = await _httpClient.GetAsync("api/auth/ping", cts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    TriggerMaintenanceMode();
+                }
+            }
+        }
+        catch
+        {
+            TriggerMaintenanceMode();
+        }
+    }
+
+    private void TriggerMaintenanceMode()
+    {
+        // Stop the timer to prevent multiple triggers
+        _heartbeatTimer.Stop();
+        
+        // Hide the main form
+        this.Hide();
+        
+        // Show the maintenance dialog
+        using (var frm = new FormMaintenance())
+        {
+            frm.ShowDialog();
+        }
+        
+        // Exit the application
+        Application.Exit();
+    }
 }

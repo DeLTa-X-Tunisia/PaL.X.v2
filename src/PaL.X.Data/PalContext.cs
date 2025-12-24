@@ -7,6 +7,7 @@ public class PalContext : DbContext
 {
     public DbSet<User> Users { get; set; }
     public DbSet<UserProfile> UserProfiles { get; set; }
+    public DbSet<Session> Sessions { get; set; }
 
     public PalContext(DbContextOptions<PalContext> options) : base(options)
     {

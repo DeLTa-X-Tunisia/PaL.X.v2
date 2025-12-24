@@ -9,6 +9,7 @@
 ### 📱 Client de Messagerie (PaL.X.App)
 *   **Chat en Temps Réel** : Communication instantanée fluide grâce à SignalR.
 *   **Interface Moderne** : UI soignée en HTML5/CSS3 intégrée dans une application native.
+*   **Affichage Personnalisé** : Affichage du nom complet (Nom + Prénom) pour une expérience plus conviviale.
 *   **Appels Audio & Vidéo** : Support WebRTC pour des communications claires.
 *   **Partage de Fichiers** : Échangez des documents et des médias facilement.
 *   **Gestion de Profil** : Personnalisation des avatars, statuts et informations utilisateur.
@@ -16,6 +17,7 @@
 ### 🛠️ Panneau d'Administration (PaL.X.Admin)
 *   **Contrôle du Serveur** : Démarrage, arrêt et surveillance du serveur central.
 *   **Gestion des Utilisateurs** : Supervision des comptes et des accès.
+*   **Suivi des Sessions** : Historique complet des connexions et déconnexions utilisateurs.
 *   **Logs & Monitoring** : Suivi de l'activité du système en temps réel.
 *   **Mode Maintenance** : Interface dédiée pour les opérations de maintenance.
 
@@ -50,10 +52,10 @@ Le projet est structuré en plusieurs modules :
     ```
 
 2.  **Lancer l'application**
-    Un script PowerShell automatisé est disponible pour compiler et lancer tous les composants nécessaires.
+    Un script batch automatisé est disponible pour compiler et lancer tous les composants nécessaires.
 
-    ```powershell
-    ./start_v3_final.ps1
+    ```batch
+    .\start_all.bat
     ```
     *Ce script se charge de démarrer le serveur, puis l'interface d'administration et le client.*
 

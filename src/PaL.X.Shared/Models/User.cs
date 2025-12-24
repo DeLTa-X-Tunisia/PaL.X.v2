@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using PaL.X.Shared.Enums;
 
 namespace PaL.X.Shared.Models;
 
@@ -22,4 +23,6 @@ public class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
     public DateTime LastLogin { get; set; }
+
+    public UserStatus Status { get; set; } = UserStatus.Offline;
 }

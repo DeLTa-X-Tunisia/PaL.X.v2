@@ -6,6 +6,10 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace PaL.X.Admin;
 
 public partial class Form1 : Form
@@ -14,12 +18,18 @@ public partial class Form1 : Form
     private DataGridView dgvUsers;
     private Button btnRefresh;
     private Button btnAddUser;
+    
+    private const string ApiUrl = "http://localhost:5030";
+    private readonly HttpClient _httpClient;
+    private System.Windows.Forms.Timer _heartbeatTimer;
 
     public Form1()
     {
         InitializeComponent();
+        _httpClient = new HttpClient { BaseAddress = new Uri(ApiUrl) };
         InitializeCustomComponents();
         InitializeDatabase();
+        InitializeHeartbeat();
     }
 
     private void InitializeDatabase()
@@ -87,5 +97,43 @@ public partial class Form1 : Form
         _context.Users.Add(user);
         _context.SaveChanges();
         LoadUsers();
+    }
+
+    private void InitializeHeartbeat()
+    {
+        _heartbeatTimer = new System.Windows.Forms.Timer();
+        _heartbeatTimer.Interval = 3000; // Check every 3 seconds
+        _heartbeatTimer.Tick += async (s, e) => await CheckServerStatus();
+        _heartbeatTimer.Start();
+    }
+
+    private async Task CheckServerStatus()
+    {
+        try
+        {
+            using (var cts = new CancellationTokenSource(1000))
+            {
+                var response = await _httpClient.GetAsync("api/auth/ping", cts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    TriggerMaintenanceMode();
+                }
+            }
+        }
+        catch
+        {
+            TriggerMaintenanceMode();
+        }
+    }
+
+    private void TriggerMaintenanceMode()
+    {
+        _heartbeatTimer.Stop();
+        this.Hide();
+        using (var frm = new FormMaintenance())
+        {
+            frm.ShowDialog();
+        }
+        Application.Exit();
     }
 }
