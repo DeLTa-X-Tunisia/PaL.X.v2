@@ -1,0 +1,49 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# Rider / JetBrains
+.idea/
+
+# VS Code
+.vscode/
+
+# Windows / OS files
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Test results
+**/TestResults/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# dotnet tools / local configs
+.global.json
+
+# Publishing
+**/publish/
+
+# Node (if any)
+node_modules/
+
+# Secrets (keep config in env vars)
+**/*secrets*.json
+**/appsettings.*.local.json
+
+# User-specific csproj settings
+**/*.csproj.user

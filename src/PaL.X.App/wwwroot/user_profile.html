@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil Utilisateur - PaL.X v2</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #0078d4;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #e0e0e0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        /* Drag Region */
+        .drag-region {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .container {
+            background: var(--card-bg);
+            width: 80%;
+            height: 80%;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 30px;
+            position: relative;
+            z-index: 1;
+            overflow-y: auto;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+            text-align: center;
+            font-size: 22px;
+        }
+
+        /* Grid Layout for Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .form-group.full-width {
+            grid-column: span 2;
+        }
+
+        .profile-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .avatar-wrapper {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin-bottom: 10px;
+        }
+
+        .avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--primary-color);
+        }
+
+        .avatar-edit {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 0; /* Handled by grid gap */
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .form-control {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+        }
+
+        .form-control[readonly] {
+            background-color: #f9f9f9;
+            color: #777;
+        }
+
+        .visibility-select {
+            margin-left: 8px;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: #f9f9f9;
+            font-size: 12px;
+            cursor: pointer;
+            width: 40px; /* Icon only initially */
+            text-align: center;
+        }
+
+        .progress-container {
+            margin-bottom: 20px;
+        }
+
+        .progress-bar-bg {
+            background: #eee;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            background: var(--primary-color);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            text-align: right;
+            margin-top: 4px;
+            color: #666;
+        }
+
+        .actions {
+            margin-top: 25px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-save {
+            flex: 2;
+            padding: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-save:hover {
+            background: #005a9e;
+        }
+
+        .btn-save:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-cancel {
+            flex: 1;
+            padding: 12px;
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background: #e0e0e0;
+        }
+
+        .error-msg {
+            color: #f44336;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="drag-region" id="drag-region"></div>
+
+    <div class="container">
+        <h2>Complétez votre Profil</h2>
+        
+        <div class="progress-container">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-text" id="progress-text">0% Complété</div>
+        </div>
+
+        <div class="profile-header">
+            <div class="avatar-wrapper">
+                <img src="https://ui-avatars.com/api/?name=User&background=ddd&color=fff" id="avatar-img" class="avatar">
+                <div class="avatar-edit" onclick="changeAvatar()"><i class="fas fa-camera"></i></div>
+            </div>
+        </div>
+
+        <form id="profile-form" class="form-grid">
+            <!-- Username -->
+            <div class="form-group">
+                <label class="form-label">Nom d'utilisateur</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="username" readonly>
+                    <select class="visibility-select" disabled><option>🔒</option></select>
+                </div>
+            </div>
+
+            <!-- Email -->
+            <div class="form-group">
+                <label class="form-label">Email *</label>
+                <div class="input-group">
+                    <input type="email" class="form-control" id="email" placeholder="exemple@email.com" oninput="validate()">
+                    <select class="visibility-select" id="vis-email">
+                        <option value="0">🔒 Moi</option>
+                        <option value="1">👥 Amis</option>
+                        <option value="2">🌍 Public</option>
+                    </select>
+                </div>
+                <div class="error-msg" id="err-email">Format invalide</div>
+            </div>
+
+            <!-- Nom -->
+            <div class="form-group">
+                <label class="form-label">Nom *</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="lastname" oninput="validate()">
+                    <select class="visibility-select" id="vis-lastname">
+                        <option value="2">🌍 Public</option>
+                        <option value="1">👥 Amis</option>
+                        <option value="0">🔒 Moi</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Prénom -->
+            <div class="form-group">
+                <label class="form-label">Prénom *</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="firstname" oninput="validate()">
+                    <select class="visibility-select" id="vis-firstname">
+                        <option value="2">🌍 Public</option>
+                        <option value="1">👥 Amis</option>
+                        <option value="0">🔒 Moi</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Genre -->
+            <div class="form-group">
+                <label class="form-label">Genre *</label>
+                <div class="input-group">
+                    <select class="form-control" id="gender" onchange="validate()">
+                        <option value="">Sélectionner...</option>
+                        <option value="Homme">Homme</option>
+                        <option value="Femme">Femme</option>
+                        <option value="Autre">Autre</option>
+                    </select>
+                    <select class="visibility-select" id="vis-gender">
+                        <option value="2">🌍 Public</option>
+                        <option value="1">👥 Amis</option>
+                        <option value="0">🔒 Moi</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Date de naissance -->
+            <div class="form-group">
+                <label class="form-label">Date de naissance *</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" id="birthdate" oninput="validate()">
+                    <select class="visibility-select" id="vis-birthdate">
+                        <option value="1">👥 Amis</option>
+                        <option value="0">🔒 Moi</option>
+                        <option value="2">🌍 Public</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Pays -->
+            <div class="form-group">
+                <label class="form-label">Pays *</label>
+                <div class="input-group">
+                    <select class="form-control" id="country" onchange="validate()">
+                        <option value="">Sélectionner...</option>
+                        <option value="France">🇫🇷 France</option>
+                        <option value="Belgique">🇧🇪 Belgique</option>
+                        <option value="Canada">🇨🇦 Canada</option>
+                        <option value="Suisse">🇨🇭 Suisse</option>
+                        <option value="Maroc">🇲🇦 Maroc</option>
+                        <option value="Algérie">🇩🇿 Algérie</option>
+                        <option value="Tunisie">🇹🇳 Tunisie</option>
+                        <option value="Autre">🌍 Autre</option>
+                    </select>
+                    <select class="visibility-select" id="vis-country">
+                        <option value="2">🌍 Public</option>
+                        <option value="1">👥 Amis</option>
+                        <option value="0">🔒 Moi</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Téléphone -->
+            <div class="form-group">
+                <label class="form-label">Téléphone</label>
+                <div class="input-group">
+                    <input type="tel" class="form-control" id="phone" placeholder="+33 6 12 34 56 78" oninput="validate()">
+                    <select class="visibility-select" id="vis-phone">
+                        <option value="0">🔒 Moi</option>
+                        <option value="1">👥 Amis</option>
+                        <option value="2">🌍 Public</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+
+        <div class="actions">
+            <button type="button" class="btn-cancel" onclick="cancelProfile()">Annuler</button>
+            <button type="button" class="btn-save" id="btn-save" onclick="saveProfile()" disabled>Enregistrer et Continuer</button>
+        </div>
+    </div>
+
+    <script>
+        // Drag Support
+        document.getElementById('drag-region').addEventListener('mousedown', (e) => {
+            if (e.button === 0) window.chrome.webview.postMessage({ type: 'drag' });
+        });
+
+        function cancelProfile() {
+            window.chrome.webview.postMessage({ type: 'cancelProfile' });
+        }
+
+        function validate() {
+            const email = document.getElementById('email').value;
+            const lastname = document.getElementById('lastname').value;
+            const firstname = document.getElementById('firstname').value;
+            const gender = document.getElementById('gender').value;
+            const birthdate = document.getElementById('birthdate').value;
+            const country = document.getElementById('country').value;
+
+            // Email regex
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const isEmailValid = emailRegex.test(email);
+            document.getElementById('err-email').style.display = isEmailValid ? 'none' : 'block';
+
+            // Calculate progress
+            let filled = 0;
+            let total = 6;
+            if (isEmailValid) filled++;
+            if (lastname) filled++;
+            if (firstname) filled++;
+            if (gender) filled++;
+            if (birthdate) filled++;
+            if (country) filled++;
+
+            const pct = Math.round((filled / total) * 100);
+            document.getElementById('progress-fill').style.width = pct + '%';
+            document.getElementById('progress-text').innerText = pct + '% Complété';
+
+            // Enable button if 100%
+            document.getElementById('btn-save').disabled = (pct < 100);
+        }
+
+        function saveProfile() {
+            const profile = {
+                email: document.getElementById('email').value,
+                firstName: document.getElementById('firstname').value,
+                lastName: document.getElementById('lastname').value,
+                gender: document.getElementById('gender').value,
+                birthDate: document.getElementById('birthdate').value,
+                country: document.getElementById('country').value,
+                phoneNumber: document.getElementById('phone').value,
+                
+                // Visibilities
+                emailVisibility: parseInt(document.getElementById('vis-email').value),
+                nameVisibility: parseInt(document.getElementById('vis-lastname').value), // Using same for first/last
+                genderVisibility: parseInt(document.getElementById('vis-gender').value),
+                birthDateVisibility: parseInt(document.getElementById('vis-birthdate').value),
+                countryVisibility: parseInt(document.getElementById('vis-country').value),
+                phoneNumberVisibility: parseInt(document.getElementById('vis-phone').value)
+            };
+
+            window.chrome.webview.postMessage({
+                type: 'saveProfile',
+                payload: profile
+            });
+        }
+
+        function changeAvatar() {
+            // Placeholder for avatar upload
+            alert("Fonctionnalité d'upload d'avatar à venir !");
+        }
+
+        window.chrome.webview.addEventListener('message', event => {
+            const data = event.data;
+            if (data.type === 'initProfile') {
+                document.getElementById('username').value = data.username;
+                // Pre-fill if existing data (optional)
+            }
+        });
+
+        // Signal ready
+        window.chrome.webview.postMessage({ type: 'profileReady' });
+    </script>
+</body>
+</html>

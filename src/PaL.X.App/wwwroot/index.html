@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaL.X v2</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <div class="chat-header">
+        <div class="user-info">
+            <img src="https://via.placeholder.com/40" alt="Avatar" class="avatar" id="recipient-avatar">
+            <div class="user-details">
+                <span class="user-name" id="recipient-name">Chargement...</span>
+                <span class="user-status">
+                    <div class="status-dot online"></div> En ligne
+                </span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <!-- Icons (using text for now, will replace with images) -->
+            <div class="icon-btn" title="Appel Vocal">📞</div>
+            <div class="icon-btn" title="Appel Vidéo">📹</div>
+            <div class="icon-btn" title="Historique">📜</div>
+        </div>
+    </div>
+
+    <!-- Chat History -->
+    <div class="chat-history" id="chat-history">
+        <!-- Messages will be injected here -->
+        <div class="message-row received">
+            <div class="message-bubble">
+                Bienvenue sur PaL.X v2 ! 🚀<br>
+                L'interface est maintenant 100% Web.
+                <div class="message-meta">10:00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer / Input -->
+    <div class="chat-footer">
+        <!-- Formatting Toolbar -->
+        <div class="toolbar">
+            <button class="toolbar-btn" onclick="document.execCommand('bold', false, null)" title="Gras"><b>B</b></button>
+            <button class="toolbar-btn" onclick="document.execCommand('italic', false, null)" title="Italique"><i>I</i></button>
+            <button class="toolbar-btn" onclick="document.execCommand('underline', false, null)" title="Souligné"><u>U</u></button>
+            <button class="toolbar-btn" onclick="document.execCommand('strikeThrough', false, null)" title="Barré"><s>S</s></button>
+        </div>
+
+        <div class="input-wrapper">
+            <button class="footer-btn" id="smiley-btn" title="Smileys">😊</button>
+            <button class="footer-btn" id="image-btn" title="Envoyer image">📷</button>
+            
+            <div class="input-container">
+                <div class="message-input" id="message-input" contenteditable="true" placeholder="Écrivez votre message..."></div>
+            </div>
+            
+            <button class="footer-btn" id="send-btn" title="Envoyer">➤</button>
+        </div>
+    </div>
+
+    <!-- Smiley Picker -->
+    <div class="smiley-picker hidden" id="smiley-picker">
+        <div class="smiley-tabs" id="smiley-tabs">
+            <!-- Tabs injected by JS -->
+        </div>
+        <div class="smiley-grid" id="smiley-grid">
+            <!-- Smileys injected by JS -->
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

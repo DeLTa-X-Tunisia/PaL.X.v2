@@ -1,0 +1,146 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaL.X.Shared\PaL.X.Shared.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
+    <PackageReference Include="System.Net.Http.Json" Version="9.0.0" />
+    <PackageReference Include="QuestPDF" Version="2024.3.0" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio.Lame" Version="1.1.3" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Icons\**\*.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\various\**">
+      <Link>various\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\send file\**">
+      <Link>send file\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Voice\**">
+      <Link>Voice\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\gender\**">
+      <Link>gender\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\status\**">
+      <Link>status\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\smiley\**">
+      <Link>smiley\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Appel_Vocal.png">
+      <Link>Assets\Chat_Form\Appel_Vocal.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Mic_ON.png">
+      <Link>Assets\Chat_Form\Mic_ON.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Video_Call.png">
+      <Link>Assets\Chat_Form\Video_Call.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Save_History.png">
+      <Link>Assets\Chat_Form\Save_History.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Save_His\save_docs.png">
+      <Link>Assets\Chat_Form\Save_His\save_docs.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Save_His\save_pdf.png">
+      <Link>Assets\Chat_Form\Save_His\save_pdf.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Save_His\save_txt.png">
+      <Link>Assets\Chat_Form\Save_His\save_txt.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\Eistory_E.png">
+      <Link>Assets\Chat_Form\Eistory_E.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Chat_Form\History_F.png">
+      <Link>Assets\Chat_Form\History_F.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Appel en cour.png">
+      <Link>Assets\Video CaLL\Appel en cour.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\raccrocher.png">
+      <Link>Assets\Video CaLL\raccrocher.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Cam_OFF.png">
+      <Link>Assets\Video CaLL\Cam_OFF.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Cam_ON.png">
+      <Link>Assets\Video CaLL\Cam_ON.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Mic_OFF.png">
+      <Link>Assets\Video CaLL\Mic_OFF.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Mic_ON.png">
+      <Link>Assets\Video CaLL\Mic_ON.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Msg_Chat_En_Appel_Video.png">
+      <Link>Assets\Video CaLL\Msg_Chat_En_Appel_Video.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\PaL.X.Assets\Video CaLL\Msg_Chat_Appel_Video_Terminé.png">
+      <Link>Assets\Video CaLL\Msg_Chat_Appel_Video_Terminé.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="Video\WebRtc\webrtc_call.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="wwwroot\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,624 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
+using PaL.X.Client.Services;
+
+namespace PaL.X.Client.Controls
+{
+    public class ChatMessageControl : UserControl
+    {
+        private FlowLayoutPanel _flpContent = new FlowLayoutPanel();
+        private Label _lblSender = new Label();
+        private Label _lblTime = new Label();
+        private bool _isIncoming;
+        private RichTextBox _rtbTemp; // Temporary RichTextBox for RTF parsing
+        private static readonly Regex RtfImageRegex = new Regex(@"\{\\pict[^}]*?([0-9a-fA-F\s]+)\}", RegexOptions.Compiled | RegexOptions.Singleline);
+    private static readonly Regex MetadataRegex = new Regex(@"\\uc0\\u8203\?((?:\\[\\{}]|\\u-?\\d+\\??|[^\\{}])+?)\\uc0\\u8203\?", RegexOptions.Compiled | RegexOptions.Singleline);
+        
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int MessageId { get; set; }
+        
+        public DateTime Timestamp { get; private set; }
+        
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool IsEdited { get; set; }
+        
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int SenderId { get; set; }
+        
+        public string OriginalContent { get; private set; } = string.Empty;
+
+        public ChatMessageControl(int messageId, int senderId, string senderName, string messageContent, DateTime time, bool isIncoming, bool isEdited)
+        {
+            MessageId = messageId;
+            SenderId = senderId;
+            Timestamp = time;
+            IsEdited = isEdited;
+            OriginalContent = messageContent;
+            _isIncoming = isIncoming;
+            this.AutoSize = true;
+            this.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            this.Padding = new Padding(5);
+            this.Margin = new Padding(0, 5, 0, 5);
+            this.BackColor = Color.Transparent;
+
+            _rtbTemp = new RichTextBox(); // For RTF parsing
+            _rtbTemp.Visible = false;
+
+            InitializeControls(senderName, time);
+            ParseAndAddContent(messageContent);
+        }
+
+        private void InitializeControls(string senderName, DateTime time)
+        {
+            // Container for the whole message block
+            var mainContainer = new FlowLayoutPanel();
+            mainContainer.FlowDirection = FlowDirection.TopDown;
+            mainContainer.AutoSize = true;
+            mainContainer.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            mainContainer.WrapContents = false;
+            mainContainer.BackColor = Color.White; // Same as chat background
+            mainContainer.Padding = new Padding(8);
+            // Rounded corners hack: standard panels don't support it easily, keeping it simple for now.
+            
+            // Sender Label
+            // _lblSender already initialized to avoid nullability warnings
+            _lblSender.Text = senderName;
+            _lblSender.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            _lblSender.ForeColor = _isIncoming ? Color.DarkBlue : Color.DarkGreen;
+            _lblSender.AutoSize = true;
+            mainContainer.Controls.Add(_lblSender);
+
+            // Content Flow (for mixed text + images)
+            // _flpContent already initialized to avoid nullability warnings
+            _flpContent.FlowDirection = FlowDirection.LeftToRight;
+            _flpContent.WrapContents = true;
+            _flpContent.AutoSize = true;
+            _flpContent.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            _flpContent.MaximumSize = new Size(400, 0); // Limit width
+            _flpContent.Margin = new Padding(0, 5, 0, 5);
+            mainContainer.Controls.Add(_flpContent);
+
+            // Time Label
+            // _lblTime already initialized to avoid nullability warnings
+            _lblTime.Text = time.ToShortTimeString();
+            _lblTime.Font = new Font("Segoe UI", 7, FontStyle.Regular);
+            _lblTime.ForeColor = Color.Gray;
+            _lblTime.AutoSize = true;
+            _lblTime.Margin = new Padding(0, 2, 0, 0);
+            // Align right
+            // FlowLayoutPanel doesn't support individual alignment easily, so we just add it.
+            mainContainer.Controls.Add(_lblTime);
+
+            this.Controls.Add(mainContainer);
+        }
+
+        private void ParseAndAddContent(string content)
+        {
+            // Check if content is RTF format
+            if (content.StartsWith("{\\rtf"))
+            {
+                ParseRtfContent(content);
+            }
+            else
+            {
+                // Legacy plain text parsing
+                string pattern = @"\[smiley:(.*?)\]";
+                var parts = Regex.Split(content, pattern);
+
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    string part = parts[i];
+                    if (string.IsNullOrEmpty(part)) continue;
+
+                    if (i % 2 != 0) // It's a smiley filename
+                    {
+                        AddSmiley(part);
+                    }
+                    else // It's text
+                    {
+                        AddText(part);
+                    }
+                }
+            }
+        }
+
+        private void ParseRtfContent(string rtfContent)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Parsing RTF content ({rtfContent.Length} chars)");
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] RTF preview: {(rtfContent.Length > 200 ? rtfContent.Substring(0, 200) : rtfContent)}...");
+            
+            _rtbTemp.Rtf = rtfContent;
+            string plainText = _rtbTemp.Text;
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Plain text: '{plainText}' (length: {plainText.Length})");
+
+            var embeddedImages = ExtractImagesFromRtf(rtfContent);
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Extracted {embeddedImages.Count} embedded images");
+            var metadataQueue = ExtractMetadataQueue(rtfContent);
+
+            int placeholderCount = 0;
+            int textStart = 0;
+            for (int i = 0; i < plainText.Length; i++)
+            {
+                if (plainText[i] != '\uFFFC')
+                {
+                    continue;
+                }
+
+                placeholderCount++;
+                System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Found placeholder #{placeholderCount} at position {i}");
+
+                if (i > textStart)
+                {
+                    AddFormattedTextRange(textStart, i);
+                }
+
+                string? metadataName = metadataQueue.Count > 0 ? metadataQueue.Dequeue() : null;
+                if (!TryAddSmileyFromMetadata(embeddedImages, metadataName))
+                {
+                    AddImageFromQueue(embeddedImages, metadataName);
+                }
+
+                textStart = i + 1;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Total placeholders found: {placeholderCount}");
+
+            if (textStart < plainText.Length)
+            {
+                AddFormattedTextRange(textStart, plainText.Length);
+            }
+
+            while (metadataQueue.Count > 0)
+            {
+                metadataQueue.Dequeue();
+            }
+
+            while (embeddedImages.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] WARNING: Disposing unused embedded image");
+                var leftover = embeddedImages.Dequeue();
+                leftover.Dispose();
+            }
+        }
+
+        private void AddSmiley(string filename)
+        {
+            var sanitized = SanitizeSmileyFileName(filename);
+            if (string.IsNullOrWhiteSpace(sanitized))
+            {
+                AddText($"[{filename}]");
+                return;
+            }
+
+            if (ResourceImageStore.TryGetSmileyResource(sanitized, out var resourceKey))
+            {
+                var image = ResourceImageStore.LoadImage(resourceKey);
+                if (image != null)
+                {
+                    AddImageToContent(image);
+                    return;
+                }
+            }
+
+            AddText($"[{sanitized}]");
+        }
+
+        private void AddImageFromQueue(Queue<Image> images, string? filename)
+        {
+            if (images.Count == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(filename))
+                {
+                    AddSmiley(filename);
+                }
+                return;
+            }
+
+            var image = images.Dequeue();
+
+            if (!string.IsNullOrWhiteSpace(filename))
+            {
+                var sanitized = SanitizeSmileyFileName(filename);
+                if (!string.IsNullOrWhiteSpace(sanitized) && ResourceImageStore.TryGetSmileyResource(sanitized, out var resourceKey))
+                {
+                    image.Dispose();
+                    AddSmiley(sanitized);
+                    return;
+                }
+            }
+
+            AddImageToContent(image);
+        }
+
+        private static string DecodeRtfText(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            var sb = new StringBuilder(value.Length);
+            int length = value.Length;
+
+            for (int i = 0; i < length; i++)
+            {
+                char ch = value[i];
+                if (ch != '\\')
+                {
+                    sb.Append(ch);
+                    continue;
+                }
+
+                int remaining = length - i;
+                if (remaining >= 2)
+                {
+                    char next = value[i + 1];
+
+                    if (next == '\\' || next == '{' || next == '}')
+                    {
+                        sb.Append(next);
+                        i++;
+                        continue;
+                    }
+
+                    if (next == 'u')
+                    {
+                        if (remaining >= 3 && value[i + 2] == 'c')
+                        {
+                            int k = i + 3;
+                            while (k < length && char.IsDigit(value[k]))
+                            {
+                                k++;
+                            }
+                            i = k - 1;
+                            continue;
+                        }
+
+                        int j = i + 2;
+                        bool isNegative = false;
+                        if (j < length && value[j] == '-')
+                        {
+                            isNegative = true;
+                            j++;
+                        }
+
+                        int digitStart = j;
+                        while (j < length && char.IsDigit(value[j]))
+                        {
+                            j++;
+                        }
+
+                        if (digitStart < j && int.TryParse(value.Substring(digitStart, j - digitStart), out int code))
+                        {
+                            if (isNegative)
+                            {
+                                code = -code;
+                            }
+
+                            if (code != 8203 && code >= char.MinValue && code <= char.MaxValue)
+                            {
+                                sb.Append((char)code);
+                            }
+                        }
+
+                        if (j < length && value[j] == '?')
+                        {
+                            j++;
+                        }
+
+                        i = j - 1;
+                        continue;
+                    }
+
+                    int controlEnd = i + 1;
+                    while (controlEnd < length && char.IsLetter(value[controlEnd]))
+                    {
+                        controlEnd++;
+                    }
+                    while (controlEnd < length && char.IsDigit(value[controlEnd]))
+                    {
+                        controlEnd++;
+                    }
+                    if (controlEnd < length && value[controlEnd] == ' ')
+                    {
+                        controlEnd++;
+                    }
+                    i = controlEnd - 1;
+                    continue;
+                }
+
+                // Trailing single backslash, ignore
+                break;
+            }
+
+            return sb.ToString().Trim();
+        }
+
+        private bool TryAddSmileyFromMetadata(Queue<Image> images, string? filename)
+        {
+            var sanitized = SanitizeSmileyFileName(filename ?? string.Empty);
+            if (string.IsNullOrEmpty(sanitized))
+            {
+                System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Empty filename after sanitization: '{filename}'");
+                return false;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Looking for smiley: '{sanitized}'");
+            if (!ResourceImageStore.TryGetSmileyResource(sanitized, out var resourceKey))
+            {
+                System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Smiley not found in resources: '{sanitized}'");
+                return false;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Found resource: '{resourceKey}'");
+            var image = ResourceImageStore.LoadImage(resourceKey);
+            if (image == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Failed to load image from: '{resourceKey}'");
+                return false;
+            }
+
+            if (images.Count > 0)
+            {
+                var embedded = images.Dequeue();
+                embedded.Dispose();
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Successfully loaded animated smiley: '{sanitized}' (CanAnimate: {ImageAnimator.CanAnimate(image)})");
+            AddImageToContent(image);
+            return true;
+        }
+
+        private static Queue<string> ExtractMetadataQueue(string rtfContent)
+        {
+            var queue = new Queue<string>();
+            if (string.IsNullOrEmpty(rtfContent))
+            {
+                return queue;
+            }
+
+            foreach (Match match in MetadataRegex.Matches(rtfContent))
+            {
+                var encoded = match.Groups[1].Value;
+                var decoded = DecodeRtfText(encoded);
+                if (!string.IsNullOrWhiteSpace(decoded))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Extracted metadata: '{decoded}'");
+                    queue.Enqueue(decoded);
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ChatMessageControl] Total metadata entries: {queue.Count}");
+            return queue;
+        }
+
+        private void AddImageToContent(Image image)
+        {
+            var pic = new PictureBox
+            {
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Size = new Size(28, 28),
+                BackColor = Color.Transparent,
+                Margin = new Padding(2),
+                Image = image
+            };
+
+            EventHandler? frameHandler = null;
+            if (ImageAnimator.CanAnimate(image))
+            {
+                frameHandler = (_, _) =>
+                {
+                    if (pic.IsDisposed || !pic.IsHandleCreated)
+                    {
+                        if (frameHandler != null)
+                        {
+                            ImageAnimator.StopAnimate(image, frameHandler);
+                        }
+                        return;
+                    }
+
+                    pic.BeginInvoke(new Action(() =>
+                    {
+                        if (pic.IsDisposed)
+                        {
+                            return;
+                        }
+
+                        ImageAnimator.UpdateFrames(image);
+                        pic.Invalidate();
+                    }));
+                };
+
+                pic.Paint += (_, _) => ImageAnimator.UpdateFrames(image);
+                ImageAnimator.Animate(image, frameHandler);
+            }
+
+            void ReleaseImage(object? _, EventArgs __)
+            {
+                pic.Disposed -= ReleaseImage;
+                pic.HandleDestroyed -= ReleaseImage;
+                if (frameHandler != null)
+                {
+                    ImageAnimator.StopAnimate(image, frameHandler);
+                }
+                image.Dispose();
+            }
+
+            pic.Disposed += ReleaseImage;
+            pic.HandleDestroyed += ReleaseImage;
+
+            _flpContent.Controls.Add(pic);
+        }
+
+        private void AddFormattedTextRange(int start, int end)
+        {
+            if (end <= start)
+            {
+                return;
+            }
+
+            _rtbTemp.Select(start, end - start);
+            string segment = _rtbTemp.SelectedText;
+            if (string.IsNullOrEmpty(segment))
+            {
+                return;
+            }
+
+            segment = segment.Replace("\u200B", string.Empty)
+                             .Replace("\uFFFC", string.Empty)
+                             .Replace("\uFEFF", string.Empty);
+
+            var selectionFont = _rtbTemp.SelectionFont;
+            var font = selectionFont != null ? (Font)selectionFont.Clone() : new Font("Segoe UI", 10, FontStyle.Regular);
+            var color = _rtbTemp.SelectionColor.IsEmpty ? Color.Black : _rtbTemp.SelectionColor;
+
+            AddText(segment, font, color);
+        }
+
+        private void AddText(string text)
+        {
+            AddText(text, new Font("Segoe UI", 10, FontStyle.Regular), Color.Black);
+        }
+
+        private void AddText(string text, Font font, Color color)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            var sanitized = text.Replace("\u200B", string.Empty)
+                                .Replace("\uFFFC", string.Empty)
+                                .Replace("\uFEFF", string.Empty);
+            if (string.IsNullOrEmpty(sanitized))
+            {
+                return;
+            }
+
+            var lbl = new Label
+            {
+                Text = sanitized,
+                Font = font,
+                ForeColor = color.IsEmpty ? Color.Black : color,
+                AutoSize = true,
+                MaximumSize = new Size(380, 0),
+                Margin = new Padding(0, 5, 0, 5),
+                BackColor = Color.Transparent
+            };
+
+            _flpContent.Controls.Add(lbl);
+        }
+
+        private static Queue<Image> ExtractImagesFromRtf(string rtfContent)
+        {
+            var queue = new Queue<Image>();
+            if (string.IsNullOrEmpty(rtfContent))
+            {
+                return queue;
+            }
+
+            foreach (Match match in RtfImageRegex.Matches(rtfContent))
+            {
+                var hexGroup = match.Groups[1];
+                if (!hexGroup.Success)
+                {
+                    continue;
+                }
+
+                var hex = Regex.Replace(hexGroup.Value, @"[^0-9A-Fa-f]", string.Empty);
+                if (hex.Length < 2)
+                {
+                    continue;
+                }
+
+                if (!TryParseHexToBytes(hex, out var bytes))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    using var ms = new MemoryStream(bytes);
+                    var image = Image.FromStream(ms, useEmbeddedColorManagement: false, validateImageData: true);
+                    queue.Enqueue(image);
+                }
+                catch
+                {
+                    // ignore invalid image data
+                }
+            }
+
+            return queue;
+        }
+
+        private static bool TryParseHexToBytes(string hex, out byte[] bytes)
+        {
+            bytes = Array.Empty<byte>();
+            if (hex.Length % 2 != 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                var buffer = new byte[hex.Length / 2];
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    buffer[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+                }
+
+                bytes = buffer;
+                return true;
+            }
+            catch
+            {
+                bytes = Array.Empty<byte>();
+                return false;
+            }
+        }
+
+        private static string SanitizeSmileyFileName(string filename)
+        {
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(filename.Length);
+            foreach (var ch in filename)
+            {
+                if (ch == '\u200B' || ch == '\uFEFF' || ch == '?')
+                {
+                    continue;
+                }
+
+                if (char.IsControl(ch))
+                {
+                    continue;
+                }
+
+                builder.Append(ch);
+            }
+
+            return builder.ToString().Trim();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _rtbTemp?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+    }
+}

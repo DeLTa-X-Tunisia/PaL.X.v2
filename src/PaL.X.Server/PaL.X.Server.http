@@ -1,0 +1,6 @@
+@PaL.X.Server_HostAddress = http://localhost:5030
+
+GET {{PaL.X.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

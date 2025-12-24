@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - PaL.X v2</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #333;
+            overflow: hidden; /* Prevent scrollbars */
+            user-select: none;
+        }
+        
+        /* Drag Region */
+        .drag-region {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%; /* Cover full background */
+            z-index: 0; /* Behind container */
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 280px; /* Compact */
+            text-align: center;
+            position: relative;
+            z-index: 1001; /* Above drag region */
+            transition: opacity 0.3s;
+        }
+        
+        .container.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        h1 { color: #0078d4; margin-bottom: 20px; font-size: 24px; cursor: default; }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+        button:hover { background-color: #005a9e; }
+        button.secondary {
+            background-color: #e1e1e1;
+            color: #333;
+            margin-top: 8px;
+        }
+        button.secondary:hover { background-color: #d1d1d1; }
+        
+        .link {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #0078d4;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .error { color: red; font-size: 12px; margin-top: 10px; display: none; }
+        
+        /* Views */
+        #register-view { display: none; }
+
+        /* Admin Controls */
+        .admin-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: none; /* Hidden by default */
+        }
+
+        .power-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .power-btn.running {
+            background: #2ecc71;
+            box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+        }
+
+        .power-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Maintenance Overlay */
+        .maintenance-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(240, 242, 245, 0.95);
+            z-index: 1500;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .maintenance-icon {
+            font-size: 60px;
+            color: #e74c3c;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        .maintenance-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .maintenance-text {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .btn-quit {
+            position: absolute;
+            bottom: 60px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            border: none;
+            color: #666;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+        .btn-quit:hover {
+            background: #f8f9fa;
+            color: #e74c3c;
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .toast.show { opacity: 1; top: 30px; }
+        .toast.success { background: #2ecc71; }
+        .toast.error { background: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="drag-region" id="drag-region"></div>
+
+    <!-- Admin Controls -->
+    <div class="admin-controls" id="admin-controls">
+        <button class="power-btn" id="btn-server" onclick="toggleServer()" title="Démarrer/Arrêter le Serveur">
+            <i class="fas fa-power-off"></i>
+        </button>
+    </div>
+
+    <!-- Maintenance Overlay -->
+    <div class="maintenance-overlay" id="maintenance-overlay">
+        <i class="fas fa-server maintenance-icon"></i>
+        <div class="maintenance-title">Système en Maintenance</div>
+        <div class="maintenance-text">Le serveur est actuellement arrêté.<br>Veuillez réessayer plus tard.</div>
+        <button class="btn-quit" onclick="cancel()" onmousedown="event.stopPropagation()" title="Fermer l'application">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <i class="fas fa-info-circle"></i>
+        <span id="toast-msg">Message</span>
+    </div>
+
+    <!-- Login View -->
+    <div class="container" id="login-view">
+        <h1 id="app-title">PaL.X v2</h1>
+        <input type="text" id="login-username" placeholder="Nom d'utilisateur">
+        <input type="password" id="login-password" placeholder="Mot de passe">
+        <button onclick="login()">Se connecter</button>
+        <button class="secondary" onclick="cancel()">Annuler</button>
+        <div class="link" onclick="showRegister()">S'inscrire</div>
+        <div class="error" id="login-error"></div>
+    </div>
+
+    <!-- Register View -->
+    <div class="container" id="register-view">
+        <h1>Inscription</h1>
+        <input type="text" id="reg-username" placeholder="Nom d'utilisateur">
+        <input type="password" id="reg-password" placeholder="Mot de passe">
+        <input type="password" id="reg-confirm" placeholder="Confirmer mot de passe">
+        <button onclick="register()">S'inscrire</button>
+        <button class="secondary" onclick="showLogin()">Annuler</button>
+        <div class="link" onclick="showLogin()">J'ai déjà un compte</div>
+        <div class="error" id="reg-error"></div>
+    </div>
+
+    <script>
+        function showRegister() {
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('register-view').style.display = 'block';
+            clearErrors();
+        }
+
+        function showLogin() {
+            document.getElementById('register-view').style.display = 'none';
+            document.getElementById('login-view').style.display = 'block';
+            clearErrors();
+        }
+
+        function clearErrors() {
+            document.getElementById('login-error').style.display = 'none';
+            document.getElementById('reg-error').style.display = 'none';
+        }
+
+        function setTitle(title) {
+            document.getElementById('app-title').innerText = title;
+        }
+
+        // Drag Support: Listen on the background div
+        const handleDrag = (e) => {
+            // Only drag if left mouse button
+            if (e.button === 0) {
+                window.chrome.webview.postMessage({ type: 'drag' });
+            }
+        };
+
+        document.getElementById('drag-region').addEventListener('mousedown', handleDrag);
+        document.getElementById('maintenance-overlay').addEventListener('mousedown', handleDrag);
+
+        function login() {
+            const u = document.getElementById('login-username').value;
+            const p = document.getElementById('login-password').value;
+            
+            if(!u || !p) return;
+
+            window.chrome.webview.postMessage({
+                type: 'login',
+                payload: { username: u, password: p }
+            });
+        }
+
+        function register() {
+            const u = document.getElementById('reg-username').value;
+            const p = document.getElementById('reg-password').value;
+            const c = document.getElementById('reg-confirm').value;
+
+            if (p !== c) {
+                showError('reg-error', 'Les mots de passe ne correspondent pas.');
+                return;
+            }
+            if (!u || !p) {
+                showError('reg-error', 'Veuillez remplir tous les champs.');
+                return;
+            }
+
+            window.chrome.webview.postMessage({
+                type: 'register',
+                payload: { username: u, password: p }
+            });
+        }
+
+        function cancel() {
+            window.chrome.webview.postMessage({ type: 'cancel' });
+        }
+
+        function showError(id, msg) {
+            const el = document.getElementById(id);
+            el.innerText = msg;
+            el.style.display = 'block';
+        }
+
+        window.chrome.webview.addEventListener('message', event => {
+            const data = event.data;
+            if (data.type === 'loginError') {
+                showError('login-error', data.message);
+            } else if (data.type === 'registerError') {
+                showError('reg-error', data.message);
+            } else if (data.type === 'registerSuccess') {
+                // Auto login or switch to login
+                showLogin();
+                document.getElementById('login-username').value = document.getElementById('reg-username').value;
+                document.getElementById('login-password').value = document.getElementById('reg-password').value;
+                showError('login-error', 'Compte créé ! Connectez-vous.'); // Green ideally
+                document.getElementById('login-error').style.color = 'green';
+            } else if (data.type === 'setAdminMode') {
+                document.getElementById('admin-controls').style.display = 'block';
+                updateServerStatus(data.isRunning);
+            } else if (data.type === 'serverStatus') {
+                updateServerStatus(data.isRunning);
+                showToast(data.isRunning ? 'Serveur Démarré' : 'Serveur Arrêté', data.isRunning ? 'success' : 'error');
+            }
+        });
+
+        // Server Control Logic
+        let isServerRunning = false;
+        let healthCheckInterval = null;
+
+        function toggleServer() {
+            window.chrome.webview.postMessage({ type: 'toggleServer' });
+        }
+
+        function updateServerStatus(running) {
+            isServerRunning = running;
+            const btn = document.getElementById('btn-server');
+            const overlay = document.getElementById('maintenance-overlay');
+            const containers = document.querySelectorAll('.container');
+
+            if (running) {
+                btn.classList.add('running');
+                overlay.style.display = 'none';
+                containers.forEach(c => c.classList.remove('disabled'));
+                startHealthCheck();
+            } else {
+                btn.classList.remove('running');
+                // Only show overlay if NOT admin (or maybe show it but dimmed?)
+                // Requirement: "When backend stops, all users... disconnected... message elegant"
+                // For Admin, we want to see the button to turn it back on!
+                // So we show overlay but keep button visible (z-index handles this)
+                overlay.style.display = 'flex';
+                containers.forEach(c => c.classList.add('disabled'));
+                stopHealthCheck();
+            }
+        }
+
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            const txt = document.getElementById('toast-msg');
+            txt.innerText = msg;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Health Check (Polling)
+        function startHealthCheck() {
+            if (healthCheckInterval) return;
+            healthCheckInterval = setInterval(checkServerHealth, 2000);
+        }
+
+        function stopHealthCheck() {
+            if (healthCheckInterval) {
+                clearInterval(healthCheckInterval);
+                healthCheckInterval = null;
+            }
+        }
+
+        async function checkServerHealth() {
+            try {
+                // Simple fetch to root or health endpoint
+                // Note: This might fail with CORS if not configured, but WebView2 usually handles localhost fine
+                // Or we can ask C# to check.
+                // Let's try fetch first.
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 1000);
+                
+                const response = await fetch('https://localhost:7082/', { 
+                    mode: 'no-cors', 
+                    signal: controller.signal 
+                });
+                clearTimeout(id);
+                
+                // If we reach here, server is likely up (even if 404 or opaque)
+                if (!isServerRunning) {
+                    // Detected UP from DOWN state (maybe started externally)
+                    // updateServerStatus(true); // Let C# drive this for Admin
+                }
+            } catch (e) {
+                // Server likely down
+                if (isServerRunning) {
+                    // Detected DOWN
+                    // For Client: Show overlay
+                    // For Admin: C# should have told us, but this is a backup
+                    if (!document.getElementById('admin-controls').style.display === 'block') {
+                         document.getElementById('maintenance-overlay').style.display = 'flex';
+                         document.querySelectorAll('.container').forEach(c => c.classList.add('disabled'));
+                    }
+                }
+            }
+        }
+        
+        // Start polling by default for clients (Admin will override via setAdminMode)
+        startHealthCheck();
+
+    </script>
+</body>
+</html>

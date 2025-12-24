@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PaL.X WebRTC Call</title>
+  <style>
+    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
+    #remote { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; }
+    #local { position:absolute; right:12px; bottom:12px; width:220px; height:140px; object-fit:cover; background:#111; border:1px solid rgba(255,255,255,0.15); }
+  </style>
+</head>
+<body>
+  <video id="remote" autoplay playsinline></video>
+  <video id="local" autoplay playsinline muted></video>
+
+  <script>
+    let pc = null;
+    let localStream = null;
+    let remoteStream = new MediaStream();
+
+    const remoteVideo = document.getElementById('remote');
+    const localVideo = document.getElementById('local');
+    remoteVideo.srcObject = remoteStream;
+
+    function post(msg) {
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage(msg);
+        }
+      } catch (_) {}
+    }
+
+    async function ensureStarted() {
+      if (pc) return;
+
+      pc = new RTCPeerConnection({
+        iceServers: [ { urls: [ 'stun:stun.l.google.com:19302' ] } ]
+      });
+
+      pc.onicecandidate = (ev) => {
+        if (!ev.candidate) return;
+        post({ kind: 'webrtc-signal', signalType: 'ice', payload: JSON.stringify(ev.candidate) });
+      };
+
+      pc.ontrack = (ev) => {
+        try {
+          remoteStream.addTrack(ev.track);
+        } catch (_) {}
+      };
+
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
+
+      for (const track of localStream.getTracks()) {
+        pc.addTrack(track, localStream);
+      }
+
+      post({ kind: 'webrtc-ready' });
+    }
+
+    async function createOffer() {
+      await ensureStarted();
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      post({ kind: 'webrtc-signal', signalType: 'offer', payload: JSON.stringify(pc.localDescription) });
+    }
+
+    async function handleOffer(payload) {
+      await ensureStarted();
+      const desc = JSON.parse(payload);
+      await pc.setRemoteDescription(desc);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      post({ kind: 'webrtc-signal', signalType: 'answer', payload: JSON.stringify(pc.localDescription) });
+    }
+
+    async function handleAnswer(payload) {
+      await ensureStarted();
+      const desc = JSON.parse(payload);
+      await pc.setRemoteDescription(desc);
+    }
+
+    async function handleIce(payload) {
+      await ensureStarted();
+      const cand = JSON.parse(payload);
+      try {
+        await pc.addIceCandidate(cand);
+      } catch (_) {}
+    }
+
+    function setMicEnabled(enabled) {
+      if (!localStream) return;
+      for (const t of localStream.getAudioTracks()) t.enabled = !!enabled;
+    }
+
+    function setCamEnabled(enabled) {
+      if (!localStream) return;
+      for (const t of localStream.getVideoTracks()) t.enabled = !!enabled;
+    }
+
+    function hangup() {
+      try {
+        if (localStream) {
+          for (const t of localStream.getTracks()) t.stop();
+        }
+      } catch (_) {}
+      try { if (pc) pc.close(); } catch (_) {}
+      pc = null;
+      localStream = null;
+      remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
+    }
+
+    // Called by host (C#)
+    window.__palxReceiveSignal = async function(signalType, payload) {
+      if (signalType === 'offer') return await handleOffer(payload);
+      if (signalType === 'answer') return await handleAnswer(payload);
+      if (signalType === 'ice') return await handleIce(payload);
+      if (signalType === 'hangup') return hangup();
+    };
+
+    window.__palxStart = async function(isInitiator) {
+      await ensureStarted();
+      if (isInitiator) {
+        await createOffer();
+      }
+    };
+
+    window.__palxSetMic = function(on) { setMicEnabled(on); };
+    window.__palxSetCam = function(on) { setCamEnabled(on); };
+    window.__palxHangup = function() { hangup(); };
+
+    // Tell host page loaded
+    post({ kind: 'webrtc-page-loaded' });
+  </script>
+</body>
+</html>

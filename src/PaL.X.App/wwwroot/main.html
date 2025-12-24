@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaL.X v2</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #0078d4;
+            --bg-color: #f0f2f5;
+            --sidebar-bg: #ffffff;
+            --text-color: #333;
+            --status-online: #4caf50;
+            --status-busy: #f44336;
+            --status-away: #ff9800;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Drag Region */
+        .drag-region {
+            height: 30px;
+            background: var(--sidebar-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 12px;
+            color: #888;
+            border-bottom: 1px solid #eee;
+            z-index: 1000;
+        }
+        
+        .app-container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 30px);
+        }
+
+        /* Sidebar (Main Vertical Form) */
+        .sidebar {
+            width: 100%; /* Full width for the "Main Form" view */
+            background: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 1px 0 5px rgba(0,0,0,0.05);
+        }
+
+        /* User Profile Header */
+        .profile-header {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .avatar-container {
+            position: relative;
+            margin-right: 15px;
+        }
+
+        .avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: var(--status-online);
+            border: 2px solid #fff;
+        }
+
+        .user-info h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text-color);
+        }
+
+        .user-info .status-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Search Bar */
+        .search-box {
+            padding: 15px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 15px;
+            border-radius: 20px;
+            border: 1px solid #eee;
+            background: #f9f9f9;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            background: #fff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0,120,212,0.1);
+        }
+
+        /* Friend List */
+        .friend-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 10px;
+        }
+
+        .friend-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 5px;
+        }
+
+        .friend-item:hover {
+            background-color: #f5f7f9;
+        }
+
+        .friend-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 12px;
+            background-color: #ddd;
+        }
+
+        .friend-info {
+            flex: 1;
+        }
+
+        .friend-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .friend-status {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* Bottom Bar */
+        .bottom-bar {
+            padding: 15px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #888;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .icon-btn:hover {
+            color: var(--primary-color);
+        }
+
+        .icon-btn.logout:hover {
+            color: #f44336;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="drag-region" id="drag-region">
+        <i class="fas fa-bars" style="margin-right: 10px;"></i> <span id="app-title">PaL.X v2</span>
+    </div>
+
+    <div class="app-container">
+        <div class="sidebar">
+            <!-- Profile -->
+            <div class="profile-header">
+                <div class="avatar-container">
+                    <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="Avatar" class="avatar" id="user-avatar">
+                    <div class="status-indicator" id="user-status-dot"></div>
+                </div>
+                <div class="user-info">
+                    <h2 id="user-name">Chargement...</h2>
+                    <div class="status-text" id="user-status-text">En ligne</div>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="Rechercher un ami...">
+            </div>
+
+            <!-- Friends -->
+            <div class="friend-list" id="friend-list">
+                <!-- Friends will be injected here -->
+            </div>
+
+            <!-- Bottom Actions -->
+            <div class="bottom-bar">
+                <button class="icon-btn" title="Paramètres"><i class="fas fa-cog"></i></button>
+                <button class="icon-btn" title="Ajouter un ami"><i class="fas fa-user-plus"></i></button>
+                <button class="icon-btn logout" title="Déconnexion" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Drag Support
+        document.getElementById('drag-region').addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                window.chrome.webview.postMessage({ type: 'drag' });
+            }
+        });
+
+        function logout() {
+            window.chrome.webview.postMessage({ type: 'logout' });
+        }
+
+        function setUser(user) {
+            document.getElementById('user-name').innerText = user.username;
+            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${user.username}&background=0078d4&color=fff`;
+            
+            if (user.isAdmin) {
+                document.getElementById('app-title').innerText = "PaL.X Admin Panel";
+                document.getElementById('user-status-text').innerText = "Administrateur";
+                document.getElementById('user-status-text').style.color = "#f44336";
+            } else {
+                document.getElementById('app-title').innerText = "PaL.X Client";
+            }
+        }
+
+        function addFriend(friend) {
+            const list = document.getElementById('friend-list');
+            const item = document.createElement('div');
+            item.className = 'friend-item';
+            item.innerHTML = `
+                <img src="https://ui-avatars.com/api/?name=${friend.name}&background=random" class="friend-avatar">
+                <div class="friend-info">
+                    <div class="friend-name">${friend.name}</div>
+                    <div class="friend-status">${friend.status}</div>
+                </div>
+            `;
+            list.appendChild(item);
+        }
+
+        // Listen for messages from C#
+        window.chrome.webview.addEventListener('message', event => {
+            const data = event.data;
+            if (data.type === 'init') {
+                setUser(data.user);
+                // Add dummy friends for now
+                addFriend({ name: "Alice", status: "En ligne" });
+                addFriend({ name: "Bob", status: "Occupé" });
+                addFriend({ name: "Charlie", status: "Absent" });
+            }
+        });
+
+        // Signal ready
+        window.chrome.webview.postMessage({ type: 'mainReady' });
+    </script>
+</body>
+</html>
