@@ -21,6 +21,7 @@ public partial class FormLogin : Form
     private AuthenticationService _authService;
     private PalContext _context;
     private Process? _serverProcess;
+    private const string ApiUrl = "http://localhost:5030";
 
     public User? LoggedInUser { get; private set; }
 
@@ -152,7 +153,13 @@ public partial class FormLogin : Form
                     case "profileReady":
                         if (LoggedInUser != null)
                         {
-                            PostMessage(new { type = "initProfile", username = LoggedInUser.Username });
+                            var profile = await _authService.GetProfileAsync(LoggedInUser.Id);
+                            string avatarUrl = profile?.ProfilePictureUrl;
+                            if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
+                            {
+                                 avatarUrl = ApiUrl + avatarUrl;
+                            }
+                            PostMessage(new { type = "initProfile", username = LoggedInUser.Username, avatarUrl = avatarUrl });
                         }
                         break;
                     case "saveProfile":
@@ -172,7 +179,13 @@ public partial class FormLogin : Form
                     case "mainReady":
                         if (LoggedInUser != null)
                         {
-                            PostMessage(new { type = "init", user = new { username = LoggedInUser.Username, isAdmin = LoggedInUser.IsAdmin } });
+                            var profile = await _authService.GetProfileAsync(LoggedInUser.Id);
+                            string avatarUrl = profile?.ProfilePictureUrl;
+                            if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
+                            {
+                                 avatarUrl = ApiUrl + avatarUrl;
+                            }
+                            PostMessage(new { type = "init", user = new { username = LoggedInUser.Username, isAdmin = LoggedInUser.IsAdmin, avatarUrl = avatarUrl } });
                         }
                         break;
                     case "logout":

@@ -19,6 +19,7 @@ public partial class Form1 : Form
 {
     private Microsoft.Web.WebView2.WinForms.WebView2 webView;
     private const string AssetsPath = @"C:\Users\azizi\OneDrive\Desktop\PaL.X\PaL.X.v2.assets";
+    private const string ApiUrl = "http://localhost:5030";
     private AuthenticationService _authService;
     private PalContext _dbContext;
     private PaL.X.Shared.Models.User _currentUser;
@@ -138,7 +139,13 @@ public partial class Form1 : Form
                     case "mainReady":
                         if (_currentUser != null)
                         {
-                            PostMessage(new { type = "init", user = new { username = _currentUser.Username, isAdmin = _currentUser.IsAdmin } });
+                            var profile = await _authService.GetProfileAsync(_currentUser.Id);
+                            string avatarUrl = profile?.ProfilePictureUrl;
+                            if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
+                            {
+                                 avatarUrl = ApiUrl + avatarUrl;
+                            }
+                            PostMessage(new { type = "init", user = new { username = _currentUser.Username, isAdmin = _currentUser.IsAdmin, avatarUrl = avatarUrl } });
                         }
                         break;
                     case "logout":
@@ -152,7 +159,13 @@ public partial class Form1 : Form
                     case "profileReady":
                         if (_currentUser != null)
                         {
-                            PostMessage(new { type = "initProfile", username = _currentUser.Username });
+                            var profile = await _authService.GetProfileAsync(_currentUser.Id);
+                            string avatarUrl = profile?.ProfilePictureUrl;
+                            if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
+                            {
+                                 avatarUrl = ApiUrl + avatarUrl;
+                            }
+                            PostMessage(new { type = "initProfile", username = _currentUser.Username, avatarUrl = avatarUrl });
                         }
                         break;
                     case "saveProfile":

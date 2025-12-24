@@ -261,7 +261,11 @@
 
         function setUser(user) {
             document.getElementById('user-name').innerText = user.username;
-            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${user.username}&background=0078d4&color=fff`;
+            if (user.avatarUrl) {
+                document.getElementById('user-avatar').src = user.avatarUrl;
+            } else {
+                document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${user.username}&background=0078d4&color=fff`;
+            }
             
             if (user.isAdmin) {
                 document.getElementById('app-title').innerText = "PaL.X Admin Panel";

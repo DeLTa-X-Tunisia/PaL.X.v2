@@ -253,6 +253,7 @@
             <div class="avatar-wrapper">
                 <img src="https://ui-avatars.com/api/?name=User&background=ddd&color=fff" id="avatar-img" class="avatar">
                 <div class="avatar-edit" onclick="changeAvatar()"><i class="fas fa-camera"></i></div>
+                <input type="file" id="avatar-input" hidden accept="image/*">
             </div>
         </div>
 
@@ -447,15 +448,55 @@
         }
 
         function changeAvatar() {
-            // Placeholder for avatar upload
-            alert("Fonctionnalité d'upload d'avatar à venir !");
+            document.getElementById('avatar-input').click();
         }
+
+        document.getElementById('avatar-input').addEventListener('change', async function(e) {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                const username = document.getElementById('username').value;
+                
+                if (!username) {
+                    alert("Erreur: Nom d'utilisateur manquant.");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    // Show loading state
+                    const img = document.getElementById('avatar-img');
+                    img.style.opacity = '0.5';
+
+                    const response = await fetch(`http://localhost:5030/api/users/${username}/avatar`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) throw new Error('Upload failed');
+
+                    const data = await response.json();
+                    // Update image with new URL (append timestamp to force refresh)
+                    const newUrl = `http://localhost:5030${data.url}`;
+                    img.src = `${newUrl}?t=${new Date().getTime()}`;
+                    
+                } catch (error) {
+                    console.error(error);
+                    alert("Erreur lors de l'upload de l'avatar.");
+                } finally {
+                    document.getElementById('avatar-img').style.opacity = '1';
+                }
+            }
+        });
 
         window.chrome.webview.addEventListener('message', event => {
             const data = event.data;
             if (data.type === 'initProfile') {
                 document.getElementById('username').value = data.username;
-                // Pre-fill if existing data (optional)
+                if (data.avatarUrl) {
+                    document.getElementById('avatar-img').src = data.avatarUrl;
+                }
             }
         });
 
