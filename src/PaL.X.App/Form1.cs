@@ -127,17 +127,32 @@ public partial class Form1 : Form
                             try 
                             {
                                 var profileResponse = await _httpClient.GetAsync($"/api/users/{_currentUser.Username}/profile");
-                                if (profileResponse.IsSuccessStatusCode)
+                                if (profileResponse.IsSuccessStatusCode && profileResponse.StatusCode != System.Net.HttpStatusCode.NoContent)
                                 {
                                     var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
                                     avatarUrl = profile?.ProfilePictureUrl;
-                                    if (profile != null && !string.IsNullOrEmpty(profile.FirstName) && !string.IsNullOrEmpty(profile.LastName))
+                                    if (profile != null)
                                     {
-                                        fullName = $"{profile.LastName} {profile.FirstName}";
+                                        var parts = new System.Collections.Generic.List<string>();
+                                        if (!string.IsNullOrEmpty(profile.LastName)) parts.Add(profile.LastName);
+                                        if (!string.IsNullOrEmpty(profile.FirstName)) parts.Add(profile.FirstName);
+                                        
+                                        if (parts.Count > 0) fullName = string.Join(" ", parts);
+                                        
+                                        // DEBUG: Confirm we got the name
+                                        // MessageBox.Show($"Profil chargé: {fullName}");
                                     }
                                 }
+                                else 
+                                {
+                                    // DEBUG: No profile found
+                                    // MessageBox.Show($"Aucun profil trouvé pour {_currentUser.Username} (Code: {profileResponse.StatusCode})");
+                                }
                             }
-                            catch {}
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show("Erreur récupération profil: " + ex.Message);
+                            }
 
                             if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
                             {
@@ -222,19 +237,49 @@ public partial class Form1 : Form
         try
         {
             var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new { Username = username, Password = password });
+            var content = await response.Content.ReadAsStringAsync();
+
             if (response.IsSuccessStatusCode)
             {
-                _currentUser = await response.Content.ReadFromJsonAsync<PaL.X.Shared.Models.User>();
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    PostMessage(new { type = "loginError", message = "Réponse serveur vide." });
+                    return;
+                }
+
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                try
+                {
+                    _currentUser = JsonSerializer.Deserialize<PaL.X.Shared.Models.User>(content, options);
+                }
+                catch
+                {
+                    PostMessage(new { type = "loginError", message = "Format de réponse invalide." });
+                    return;
+                }
                 
                 // Check Profile
                 var profileResponse = await _httpClient.GetAsync($"/api/users/{username}/profile");
                 if (profileResponse.IsSuccessStatusCode)
                 {
-                    var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
-                    if (profile != null && profile.IsComplete())
+                    if (profileResponse.StatusCode == System.Net.HttpStatusCode.NoContent)
                     {
-                        NavigateToMain();
+                        NavigateToProfile();
                         return;
+                    }
+
+                    try
+                    {
+                        var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>(options);
+                        if (profile != null && profile.IsComplete())
+                        {
+                            NavigateToMain();
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore profile read errors
                     }
                 }
                 NavigateToProfile();
@@ -246,11 +291,11 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         {
-            PostMessage(new { type = "loginError", message = "Erreur de connexion au serveur" });
+            PostMessage(new { type = "loginError", message = $"Erreur: {ex.Message}" });
         }
     }
 
-    private void NavigateToMain()
+    private async void NavigateToMain()
     {
         this.Invoke(() => {
             this.FormBorderStyle = FormBorderStyle.None;
@@ -260,12 +305,60 @@ public partial class Form1 : Form
         webView.CoreWebView2.Navigate("https://app.pal.x/main.html");
         
         // Wait for navigation to complete then send init data
-        webView.NavigationCompleted += (s, e) => {
+        webView.NavigationCompleted += async (s, e) => {
             if (e.IsSuccess && webView.Source.ToString().EndsWith("main.html"))
             {
+                // Fetch profile to get full name and avatar
+                string fullName = _currentUser.Username;
+                string avatarUrl = null;
+                
+                try
+                {
+                    var profileResponse = await _httpClient.GetAsync($"/api/users/{_currentUser.Username}/profile");
+                    if (profileResponse.IsSuccessStatusCode && profileResponse.StatusCode != System.Net.HttpStatusCode.NoContent)
+                    {
+                        var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
+                        avatarUrl = profile?.ProfilePictureUrl;
+                        if (profile != null)
+                        {
+                            var parts = new System.Collections.Generic.List<string>();
+                            if (!string.IsNullOrEmpty(profile.LastName)) parts.Add(profile.LastName);
+                            if (!string.IsNullOrEmpty(profile.FirstName)) parts.Add(profile.FirstName);
+                            
+                            if (parts.Count > 0) fullName = string.Join(" ", parts);
+                            
+                            // DEBUG: Show what we found
+                            // MessageBox.Show($"DEBUG: Profil trouvé.\nNom: {profile.LastName}\nPrénom: {profile.FirstName}\nRésultat: {fullName}");
+                        }
+                        else
+                        {
+                             // MessageBox.Show("DEBUG: Profil null après désérialisation.");
+                        }
+                    }
+                    else
+                    {
+                        // MessageBox.Show($"DEBUG: Pas de profil (Status: {profileResponse.StatusCode})");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Erreur récupération profil: " + ex.Message);
+                }
+
+                if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
+                {
+                     avatarUrl = ApiUrl + avatarUrl;
+                }
+
                 PostMessage(new { 
                     type = "init", 
-                    user = _currentUser,
+                    user = new { 
+                        id = _currentUser.Id, 
+                        username = _currentUser.Username, 
+                        displayName = fullName, 
+                        isAdmin = _currentUser.IsAdmin, 
+                        avatarUrl = avatarUrl 
+                    },
                     apiUrl = ApiUrl
                 });
             }
@@ -312,7 +405,8 @@ public partial class Form1 : Form
             }
             else
             {
-                MessageBox.Show("Erreur lors de la sauvegarde du profil.");
+                var error = await response.Content.ReadAsStringAsync();
+                MessageBox.Show($"Erreur lors de la sauvegarde du profil ({response.StatusCode}):\n{error}");
             }
         }
         catch (Exception ex)

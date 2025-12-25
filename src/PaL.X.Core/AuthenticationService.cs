@@ -80,7 +80,7 @@ public class AuthenticationService
         await _context.SaveChangesAsync();
     }
 
-    public async Task<User> RegisterAsync(string username, string password)
+    public async Task<User> RegisterAsync(string username, string password, bool isAdmin = false)
     {
         if (await _context.Users.AnyAsync(u => u.Username == username))
         {
@@ -91,6 +91,7 @@ public class AuthenticationService
         {
             Username = username,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+            IsAdmin = isAdmin,
             CreatedAt = DateTime.UtcNow
         };
 

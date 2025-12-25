@@ -131,6 +131,14 @@ public class UsersController : ControllerBase
         if (user == null) return NotFound();
 
         var profile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == user.Id);
+        
+        // If profile is null, return 204 No Content or a default empty profile?
+        // Returning null with Ok(null) results in "null" string which is valid JSON but might be confusing.
+        // Returning NotFound() might be wrong if user exists.
+        // Let's return an empty object or null, but ensure client handles it.
+        // Actually, returning 204 No Content is standard for "resource exists but is empty/null".
+        if (profile == null) return NoContent();
+
         return Ok(profile);
     }
 

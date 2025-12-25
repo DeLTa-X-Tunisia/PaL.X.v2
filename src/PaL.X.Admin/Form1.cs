@@ -76,7 +76,33 @@ public partial class Form1 : Form
         {
             // Refresh context to get latest data
             _context.ChangeTracker.Clear();
-            var users = _context.Users.ToList();
+            
+            var users = _context.Users
+                .Select(u => new 
+                {
+                    u.Id,
+                    u.Username,
+                    u.IsAdmin,
+                    u.Status,
+                    u.CreatedAt,
+                    // Manual join since navigation property might not be set up both ways
+                    Profile = _context.UserProfiles.FirstOrDefault(p => p.UserId == u.Id)
+                })
+                .ToList()
+                .Select(u => new 
+                {
+                    u.Id,
+                    Username = u.Username,
+                    NomComplet = (u.Profile != null && (!string.IsNullOrEmpty(u.Profile.FirstName) || !string.IsNullOrEmpty(u.Profile.LastName)))
+                        ? $"{u.Profile.LastName} {u.Profile.FirstName}".Trim()
+                        : u.Username,
+                    u.IsAdmin,
+                    u.Status,
+                    Avatar = !string.IsNullOrEmpty(u.Profile?.ProfilePictureUrl) ? "Oui" : "Non",
+                    u.CreatedAt
+                })
+                .ToList();
+
             dgvUsers.DataSource = users;
         }
         catch (Exception ex)

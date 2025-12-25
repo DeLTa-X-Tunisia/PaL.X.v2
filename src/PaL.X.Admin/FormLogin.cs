@@ -186,17 +186,24 @@ public partial class FormLogin : Form
                             try
                             {
                                 var profileResponse = await _httpClient.GetAsync($"/api/users/{LoggedInUser.Username}/profile");
-                                if (profileResponse.IsSuccessStatusCode)
+                                if (profileResponse.IsSuccessStatusCode && profileResponse.StatusCode != System.Net.HttpStatusCode.NoContent)
                                 {
                                     var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
                                     avatarUrl = profile?.ProfilePictureUrl;
-                                    if (profile != null && !string.IsNullOrEmpty(profile.FirstName) && !string.IsNullOrEmpty(profile.LastName))
+                                    if (profile != null)
                                     {
-                                        fullName = $"{profile.LastName} {profile.FirstName}";
+                                        var parts = new System.Collections.Generic.List<string>();
+                                        if (!string.IsNullOrEmpty(profile.LastName)) parts.Add(profile.LastName);
+                                        if (!string.IsNullOrEmpty(profile.FirstName)) parts.Add(profile.FirstName);
+                                        
+                                        if (parts.Count > 0) fullName = string.Join(" ", parts);
                                     }
                                 }
                             }
-                            catch {}
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show("Erreur récupération profil Admin: " + ex.Message);
+                            }
 
                             if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
                             {
@@ -274,9 +281,35 @@ public partial class FormLogin : Form
         try
         {
             var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new { Username = username, Password = password });
+            var content = await response.Content.ReadAsStringAsync();
+
             if (response.IsSuccessStatusCode)
             {
-                var user = await response.Content.ReadFromJsonAsync<PaL.X.Shared.Models.User>();
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    PostMessage(new { type = "loginError", message = "Réponse serveur vide." });
+                    return;
+                }
+
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                PaL.X.Shared.Models.User? user = null;
+                
+                try
+                {
+                    user = JsonSerializer.Deserialize<PaL.X.Shared.Models.User>(content, options);
+                }
+                catch (Exception)
+                {
+                    PostMessage(new { type = "loginError", message = "Format de réponse invalide." });
+                    return;
+                }
+
+                if (user == null)
+                {
+                    PostMessage(new { type = "loginError", message = "Utilisateur introuvable." });
+                    return;
+                }
+
                 if (!user.IsAdmin)
                 {
                     PostMessage(new { type = "loginError", message = "Accès réservé aux administrateurs." });
@@ -289,11 +322,25 @@ public partial class FormLogin : Form
                 var profileResponse = await _httpClient.GetAsync($"/api/users/{username}/profile");
                 if (profileResponse.IsSuccessStatusCode)
                 {
-                    var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
-                    if (profile != null && profile.IsComplete())
+                    if (profileResponse.StatusCode == System.Net.HttpStatusCode.NoContent)
                     {
-                        NavigateToMain();
+                        // Profile not created yet
+                        NavigateToProfile();
                         return;
+                    }
+
+                    try 
+                    {
+                        var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>(options);
+                        if (profile != null && profile.IsComplete())
+                        {
+                            NavigateToMain();
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore profile read errors and force profile creation
                     }
                 }
                 NavigateToProfile();
@@ -305,11 +352,11 @@ public partial class FormLogin : Form
         }
         catch (Exception ex)
         {
-            PostMessage(new { type = "loginError", message = "Erreur de connexion au serveur." });
+            PostMessage(new { type = "loginError", message = $"Erreur: {ex.Message}" });
         }
     }
 
-    private void NavigateToMain()
+    private async void NavigateToMain()
     {
         this.Invoke(() => {
             this.Size = new Size(380, 750);
@@ -318,12 +365,50 @@ public partial class FormLogin : Form
         webView.CoreWebView2.Navigate("https://app.pal.x/main.html");
         
         // Wait for navigation to complete then send init data
-        webView.NavigationCompleted += (s, e) => {
+        webView.NavigationCompleted += async (s, e) => {
             if (e.IsSuccess && webView.Source.ToString().EndsWith("main.html"))
             {
+                // Fetch profile to get full name and avatar
+                string fullName = LoggedInUser.Username;
+                string avatarUrl = null;
+                
+                try
+                {
+                    var profileResponse = await _httpClient.GetAsync($"/api/users/{LoggedInUser.Username}/profile");
+                    if (profileResponse.IsSuccessStatusCode && profileResponse.StatusCode != System.Net.HttpStatusCode.NoContent)
+                    {
+                        var profile = await profileResponse.Content.ReadFromJsonAsync<PaL.X.Shared.Models.UserProfile>();
+                        avatarUrl = profile?.ProfilePictureUrl;
+                        if (profile != null)
+                        {
+                            var parts = new System.Collections.Generic.List<string>();
+                            if (!string.IsNullOrEmpty(profile.LastName)) parts.Add(profile.LastName);
+                            if (!string.IsNullOrEmpty(profile.FirstName)) parts.Add(profile.FirstName);
+                            
+                            if (parts.Count > 0) fullName = string.Join(" ", parts);
+                            
+                            // MessageBox.Show($"DEBUG Admin: Profil trouvé.\nNom: {profile.LastName}\nPrénom: {profile.FirstName}\nRésultat: {fullName}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Erreur récupération profil Admin: " + ex.Message);
+                }
+
+                if (!string.IsNullOrEmpty(avatarUrl) && !avatarUrl.StartsWith("http"))
+                {
+                     avatarUrl = ApiUrl + avatarUrl;
+                }
+
                 PostMessage(new { 
                     type = "init", 
-                    user = LoggedInUser,
+                    user = new { 
+                        username = LoggedInUser.Username, 
+                        displayName = fullName, 
+                        isAdmin = LoggedInUser.IsAdmin, 
+                        avatarUrl = avatarUrl 
+                    },
                     apiUrl = ApiUrl
                 });
             }
@@ -369,7 +454,8 @@ public partial class FormLogin : Form
             }
             else
             {
-                MessageBox.Show("Erreur lors de la sauvegarde du profil.");
+                var error = await response.Content.ReadAsStringAsync();
+                MessageBox.Show($"Erreur lors de la sauvegarde du profil ({response.StatusCode}):\n{error}");
             }
         }
         catch (Exception ex)
@@ -387,7 +473,7 @@ public partial class FormLogin : Form
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new { Username = username, Password = password });
+            var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new { Username = username, Password = password, IsAdmin = true });
             if (response.IsSuccessStatusCode)
             {
                 // Auto-promote to admin for this specific form (Logic moved to server or handled here? 

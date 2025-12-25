@@ -35,7 +35,17 @@ public class AuthController : ControllerBase
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         await _authService.CreateSessionAsync(user, ipAddress);
 
-        return Ok(user);
+        // Return safe user object (without password hash)
+        return Ok(new User 
+        {
+            Id = user.Id,
+            Username = user.Username,
+            IsAdmin = user.IsAdmin,
+            CreatedAt = user.CreatedAt,
+            LastLogin = user.LastLogin,
+            Status = user.Status,
+            PasswordHash = "" 
+        });
     }
 
     [HttpPost("register")]
@@ -43,7 +53,7 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var user = await _authService.RegisterAsync(request.Username, request.Password);
+            var user = await _authService.RegisterAsync(request.Username, request.Password, request.IsAdmin);
             return Ok(user);
         }
         catch (Exception ex)
